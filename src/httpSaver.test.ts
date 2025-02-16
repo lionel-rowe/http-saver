@@ -1,5 +1,5 @@
 import { assertEquals, assertNotEquals } from '@std/assert'
-import { HttpSaver } from './mod.ts'
+import { HttpSaver } from './httpSaver.ts'
 
 // Can't use spy/stub from `@std/testing/mock` because they don't allow the same function to be stubbed multiple times
 function simpleSpyFetch() {
@@ -22,6 +22,18 @@ function simpleSpyFetch() {
 	return out
 }
 
+async function getBody(res: Response) {
+	try {
+		return await res.clone().json()
+	} catch {
+		try {
+			return await res.clone().text()
+		} catch {
+			return await res.clone().bytes()
+		}
+	}
+}
+
 Deno.test(HttpSaver.name, async () => {
 	using spy = simpleSpyFetch()
 	const spiedFetch = globalThis.fetch
@@ -36,13 +48,24 @@ Deno.test(HttpSaver.name, async () => {
 		// ignore if dir doesn't exist yet
 	}
 
-	let liveJsons: unknown[]
-	let cachedJsons: unknown[]
+	let liveResponses: Response[]
+	let cachedResponses: Response[]
 	const requestConfigs = [
-		{ method: 'GET', url: 'https://jsonplaceholder.typicode.com/todos/1' },
-		{ method: 'GET', url: 'https://jsonplaceholder.typicode.com/todos/1?q=1' },
-		{ method: 'GET', url: 'https://jsonplaceholder.typicode.com/todos/2' },
-		{ method: 'GET', url: 'https://jsonplaceholder.typicode.com/todos/3' },
+		{ url: 'https://example.com' },
+		{ url: 'https://http.cat/200.jpg' },
+
+		{ url: 'https://jsonplaceholder.typicode.com/todos/1' },
+		{ url: 'https://jsonplaceholder.typicode.com/todos/1?q=1' },
+		{ url: 'https://jsonplaceholder.typicode.com/todos/2' },
+		{ url: 'https://jsonplaceholder.typicode.com/todos/3' },
+
+		{
+			url: 'https://jsonplaceholder.typicode.com/todos/6',
+			headers: {
+				authorization: 'Basic YWxhZGRpbjpvcGVuc2VzYW1l',
+			},
+		},
+
 		{
 			method: 'POST',
 			url: 'https://jsonplaceholder.typicode.com/todos',
@@ -77,28 +100,35 @@ Deno.test(HttpSaver.name, async () => {
 	]
 
 	{
-		httpSaver.options.mode = 'overwrite'
 		using _ = httpSaver.stubFetch()
 		assertNotEquals(fetch, spiedFetch)
 
-		liveJsons = await Promise.all(requestConfigs.map(async ({ url, method, body }) => {
-			const res = await fetch(url, { method, body })
-			return await res.json()
+		liveResponses = await Promise.all(requestConfigs.map(async ({ url, method, body }) => {
+			return await fetch(url, { method, body })
 		}))
 	}
 	{
-		httpSaver.options.mode = 'readOnly'
 		using _ = httpSaver.stubFetch()
 		assertNotEquals(fetch, spiedFetch)
 
-		cachedJsons = await Promise.all(requestConfigs.map(async ({ url, method, body }) => {
-			const res = await fetch(url, { method, body })
-			return await res.json()
+		cachedResponses = await Promise.all(requestConfigs.map(async ({ url, method, body }) => {
+			return await fetch(url, { method, body })
 		}))
 	}
 
 	assertEquals(fetch, spiedFetch)
 	assertEquals(spy.timesCalled, requestConfigs.length)
 
-	assertEquals(liveJsons, cachedJsons)
+	for (const i of requestConfigs.keys()) {
+		const liveRes = liveResponses[i]!
+		const cachedRes = cachedResponses[i]!
+
+		assertEquals(cachedRes.headers.get('content-type'), liveRes.headers.get('content-type'))
+		// `date` header should be removed due to not being in default sanitization allow-list
+		assertEquals(cachedRes.headers.get('date'), null)
+
+		assertEquals(await getBody(cachedRes), await getBody(liveRes))
+		assertEquals(cachedRes.status, liveRes.status)
+		assertEquals(cachedRes.statusText, liveRes.statusText)
+	}
 })

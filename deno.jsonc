@@ -3,7 +3,9 @@
 	"name": "@li/http-saver",
 	"version": "0.0.0",
 	"exports": {
-		".": "./src/mod.ts"
+		".": "./src/mod.ts",
+		"./http-saver": "./src/httpSaver.ts",
+		"./sanitizer": "./src/sanitizer.ts"
 	},
 	"tasks": {
 		"test": "deno test -RWN"
