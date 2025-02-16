@@ -1,17 +1,66 @@
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
 import { encodeHex } from '@std/encoding/hex'
+import { asArray } from './utils.ts'
 
 export type ResInfo = Partial<Record<string, Serialized>>
 
-type SerializedHeaders = Record<string, string | string[]>
-type Base64Body = { kind: 'base64'; data: string }
-type TextBody = { kind: 'text'; data: string }
-type JsonBody = { kind: 'json'; data: unknown }
-type SerializedBody = null | Base64Body | TextBody | JsonBody
-
-function asArray<T>(x: T | T[]): T[] {
-	return Array.isArray(x) ? x : [x]
+export type Serialized = {
+	request: SerializedRequest
+	response: SerializedResponse
 }
+
+// #region Request
+
+export type SerializedRequest = {
+	method: string
+	url: string
+	headers: Record<string, string | string[]>
+	body: SerializedBody
+}
+
+export async function serializeRequest(req: Request): Promise<SerializedRequest> {
+	return {
+		method: req.method,
+		url: new URL(req.url).href,
+		headers: serializeHeaders(req.headers),
+		body: serializeBody(await req.clone().arrayBuffer()),
+	}
+}
+
+// #endregion
+// #region Response
+
+export type SerializedResponse = {
+	body: SerializedBody
+	headers: SerializedHeaders
+	status: number
+	statusText: string
+}
+
+export async function serializeResponse(res: Response): Promise<SerializedResponse> {
+	const { status, statusText } = res
+	const body = serializeBody(await res.clone().arrayBuffer())
+	const headers = serializeHeaders(res.headers)
+	return { status, statusText, headers, body }
+}
+
+export function deserializeResponse(serialized: SerializedResponse): Response {
+	const { status, statusText, headers, body } = serialized
+
+	return new Response(
+		deserializeBody(body),
+		{
+			headers: deserializeHeaders(headers),
+			status,
+			statusText,
+		},
+	)
+}
+
+// #endregion
+// #region Headers
+
+export type SerializedHeaders = Record<string, string | string[]>
 
 export function serializeHeaders(headers: Headers): SerializedHeaders {
 	const out: SerializedHeaders = {}
@@ -33,13 +82,21 @@ export function deserializeHeaders(headers: SerializedHeaders): Headers {
 	return out
 }
 
+// #endregion
+// #region Body
+
+export type SerializedBody = null | Base64Body | TextBody | JsonBody
+type Base64Body = { kind: 'base64'; data: string }
+type TextBody = { kind: 'text'; data: string }
+type JsonBody = { kind: 'json'; data: unknown }
+
 /**
  * Serialize the body of a response, preferring human-readable formats when possible.
  * We don't bother to check content type or encoding headers, just whether the content can be parsed, falling back to
  * base64 encoding if it can't.
  */
-export function serializeBody(body: ArrayBuffer | Uint8Array): SerializedBody {
-	if (body.byteLength === 0) {
+export function serializeBody(body: ArrayBuffer | Uint8Array | null): SerializedBody {
+	if (body == null || body.byteLength === 0) {
 		return null
 	}
 
@@ -78,52 +135,17 @@ export function deserializeBody(body: SerializedBody): Uint8Array | null {
 	}
 }
 
-export async function serializeResponse(res: Response): Promise<SerializedResponse> {
-	const { status, statusText } = res
-	const body = serializeBody(await res.clone().arrayBuffer())
-	const headers = serializeHeaders(res.headers)
-	return { status, statusText, headers, body }
+// #endregion
+// #region Misc
+
+export function getFileName(req: SerializedRequest): string {
+	return `${encodeURIComponent(new URL(req.url).host)}.json`
 }
 
-export type Serialized = {
-	request: SerializedRequest
-	response: SerializedResponse
-}
-
-export function deserializeResponse(serialized: SerializedResponse): Response {
-	const { status, statusText, headers, body } = serialized
-
-	return new Response(
-		deserializeBody(body),
-		{
-			headers: deserializeHeaders(headers),
-			status,
-			statusText,
-		},
+export async function getKey(req: SerializedRequest): Promise<string> {
+	return encodeHex(
+		await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jsonStringifyDeterministically(req))),
 	)
-}
-
-export type SerializedRequest = {
-	method: string
-	url: string
-	headers: Record<string, string | string[]>
-	body: SerializedBody
-}
-
-export type SerializedResponse = {
-	body: SerializedBody
-	headers: SerializedHeaders
-	status: number
-	statusText: string
-}
-
-export async function serializeRequest(req: Request): Promise<SerializedRequest> {
-	return {
-		method: req.method,
-		url: new URL(req.url).href,
-		headers: serializeHeaders(req.headers),
-		body: serializeBody(await req.clone().arrayBuffer()),
-	}
 }
 
 // always use same order for keys
@@ -134,14 +156,4 @@ export function jsonStringifyDeterministically(obj: unknown) {
 		}
 		return value
 	})
-}
-
-export function getFileName(req: SerializedRequest): string {
-	return `${encodeURIComponent(new URL(req.url).host)}.json`
-}
-
-export async function getKey(req: SerializedRequest): Promise<string> {
-	return encodeHex(
-		await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jsonStringifyDeterministically(req))),
-	)
 }
