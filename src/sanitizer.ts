@@ -1,6 +1,7 @@
 const defaultSanitizerOptions: SanitizerOptions = {
 	allowedHeaders: [
 		'accept',
+		'accept-charset',
 		'accept-encoding',
 		'accept-language',
 		'accept-ranges',
@@ -10,8 +11,10 @@ const defaultSanitizerOptions: SanitizerOptions = {
 		'content-language',
 		'content-type',
 		'host',
+		'link',
+		'origin',
 		'referer',
-		'upgrade-insecure-requests',
+		'transfer-encoding',
 		'user-agent',
 	],
 	blockedQueryParams: /api[_\-]?key|auth|pass|secret|secur|token/i,

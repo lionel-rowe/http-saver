@@ -40,13 +40,8 @@ Deno.test(HttpSaver.name, async () => {
 
 	const httpSaver = new HttpSaver({
 		dirPath: '_temp/path',
+		mode: 'reset',
 	})
-
-	try {
-		await Deno.remove(httpSaver.options.dirPath, { recursive: true })
-	} catch {
-		// ignore if dir doesn't exist yet
-	}
 
 	let liveResponses: Response[]
 	let cachedResponses: Response[]

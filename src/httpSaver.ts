@@ -1,12 +1,19 @@
 import { stub } from '@std/testing/mock'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from '@std/path/join'
-import { getJsonTextFromFile } from './fs.ts'
-import type { SerializedRequest } from './serdes.ts'
-import { deserializeResponse, getFileName, getKey, serializeRequest, serializeResponse } from './serdes.ts'
+import { getJsonDataFromFile } from './fs.ts'
+import type { ResInfo, SerializedRequest } from './serdes.ts'
+import {
+	deserializeResponse,
+	getFileName,
+	getKey,
+	jsonStringifyDeterministically,
+	serializeRequest,
+	serializeResponse,
+} from './serdes.ts'
 import { Sanitizer } from './sanitizer.ts'
-
-export type Mode = 'ensure' | 'overwrite' | 'readOnly'
+import { rm } from 'node:fs/promises'
+import { assert } from '@std/assert/assert'
 
 /**
  * Constructor options for {@linkcode HttpSaver}
@@ -15,12 +22,14 @@ export type HttpSaverOptions = {
 	/**
 	 * - If `ensure`, cached responses will be used where available, substituting and caching live responses otherwise.
 	 * - If `overwrite`, live requests will always be made, bypassing and overwriting the currently cached responses.
-	 * - If `readOnly`, only cached responses will be used instead of making live requests. Any unavailable cached responses
-	 *   will throw an error.
+	 * - If `readOnly`, only cached responses will be used instead of making live requests. Any unavailable cached
+	 *   responses will throw an error.
+	 * - If `reset`, the behavior is the same as `ensure`, but starting from a clean slate, i.e. the directory will
+	 *   be deleted upon instantiation of the `HttpSaver` class.
 	 *
 	 * @default {'ensure'}
 	 */
-	mode: Mode
+	mode: 'ensure' | 'overwrite' | 'readOnly' | 'reset'
 	/**
 	 * Directory path to store cached responses.
 	 * @default {'_fixtures/responses'}
@@ -55,17 +64,35 @@ function toRequest(input: URL | Request | string, init?: RequestInit) {
 	}
 }
 
+class CacheMissError extends Error {
+	override name = this.constructor.name
+}
+
 /**
  * A class to cache responses for testing in the file system.
  */
 export class HttpSaver {
 	options: HttpSaverOptions
 	#realFetch = globalThis.fetch
+	#ready = Promise.withResolvers<void>()
 
 	constructor(options?: Partial<HttpSaverOptions>) {
-		this.options = {
+		const opts = {
 			...defaultOptions,
 			...options,
+		}
+
+		this.options = opts
+
+		assert(opts.dirPath !== '', 'dirPath must not be an empty string')
+
+		if (this.options.mode === 'reset') {
+			void (async () => {
+				await rm(opts.dirPath, { recursive: true, force: true })
+				this.#ready.resolve()
+			})()
+		} else {
+			this.#ready.resolve()
 		}
 	}
 
@@ -88,6 +115,8 @@ export class HttpSaver {
 	 */
 	stubFetch(): ReturnType<typeof stub<typeof globalThis, 'fetch'>> {
 		return stub(globalThis, 'fetch', async (input, init) => {
+			await this.#ready.promise
+
 			const req = toRequest(input, init)
 			const serializedRequest = await serializeRequest(await this.options.sanitizer.sanitizeRequest(req.clone()))
 
@@ -101,11 +130,16 @@ export class HttpSaver {
 			const params = { req, serializedRequest, key, filePath }
 
 			switch (this.options.mode) {
-				case 'ensure': {
+				case 'ensure':
+				case 'reset': {
 					try {
 						return await this.#read(params)
-					} catch {
-						return this.#overwrite(params)
+					} catch (e) {
+						if (e instanceof CacheMissError) {
+							return this.#overwrite(params)
+						}
+
+						throw e
 					}
 				}
 				case 'overwrite': {
@@ -119,9 +153,9 @@ export class HttpSaver {
 	}
 
 	async #read({ key, filePath }: StubFetchSubMethodParams) {
-		const resInfo = await getJsonTextFromFile(filePath)
+		const resInfo = await getJsonDataFromFile<ResInfo>(filePath)
 		if (!Object.hasOwn(resInfo, key)) {
-			throw new Error(
+			throw new CacheMissError(
 				`No cached response found for ${JSON.stringify(key)} in ${JSON.stringify(filePath)}`,
 			)
 		}
@@ -133,14 +167,15 @@ export class HttpSaver {
 		const [, res, resInfo] = await Promise.all([
 			mkdir(this.options.dirPath, { recursive: true }),
 			this.#realFetch(req.clone()),
-			getJsonTextFromFile(filePath),
+			getJsonDataFromFile<ResInfo>(filePath),
 		])
 
 		resInfo[key] = {
+			lastSaved: new Date().toISOString(),
 			request: serializedRequest,
 			response: await serializeResponse(await this.options.sanitizer.sanitizeResponse(res.clone())),
 		}
-		await writeFile(filePath, JSON.stringify(resInfo, null, this.options.jsonSpace) + '\n')
+		await writeFile(filePath, jsonStringifyDeterministically(resInfo, this.options.jsonSpace) + '\n')
 
 		return res
 	}

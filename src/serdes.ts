@@ -5,6 +5,7 @@ import { asArray } from './utils.ts'
 export type ResInfo = Partial<Record<string, Serialized>>
 
 export type Serialized = {
+	lastSaved: string
 	request: SerializedRequest
 	response: SerializedResponse
 }
@@ -149,11 +150,17 @@ export async function getKey(req: SerializedRequest): Promise<string> {
 }
 
 // always use same order for keys
-export function jsonStringifyDeterministically(obj: unknown) {
-	return JSON.stringify(obj, (_, value) => {
-		if (typeof value === 'object' && value != null && !Array.isArray(value)) {
-			return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a > b ? 1 : a < b ? -1 : 0))
-		}
-		return value
-	})
+export function jsonStringifyDeterministically(obj: unknown, space?: '\t' | number): string {
+	return JSON.stringify(
+		obj,
+		(_, value) => {
+			if (typeof value === 'object' && value != null && !Array.isArray(value)) {
+				return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a > b ? 1 : a < b ? -1 : 0))
+			}
+			return value
+		},
+		space,
+	)
 }
+
+// #endregion

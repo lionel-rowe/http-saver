@@ -87,16 +87,31 @@ const headersCases: Cases<Headers, SerializedHeaders> = [
 		description: 'multiple',
 		hydrated: new Headers([
 			['a', '1'],
-			['b', '2'],
-			['set-cookie', 'id=a3fWa; Expires=Wed, 21 Oct 2015 07:28:00 GMT'],
-			['set-cookie', 'id=a3fWb; Expires=Wed, 21 Oct 2015 07:28:00 GMT'],
+			['a', '2'],
 		]),
 		serialized: {
-			a: '1',
-			b: '2',
+			a: '1, 2',
+		},
+	},
+	{
+		description: 'single set-cookie',
+		hydrated: new Headers([
+			['set-cookie', 'id=c88684ef-be61-4c2e-b14e-ac48cfe59a91; Expires=Wed, 21 Oct 2015 07:28:00 GMT'],
+		]),
+		serialized: {
+			'set-cookie': 'id=c88684ef-be61-4c2e-b14e-ac48cfe59a91; Expires=Wed, 21 Oct 2015 07:28:00 GMT',
+		},
+	},
+	{
+		description: 'multiple set-cookie',
+		hydrated: new Headers([
+			['set-cookie', 'id=c88684ef-be61-4c2e-b14e-ac48cfe59a91; Expires=Wed, 21 Oct 2015 07:28:00 GMT'],
+			['set-cookie', 'id=6707e2d2-b60d-4af7-b13d-3dbd61cd94df; Expires=Thu, 22 Oct 2015 08:29:00 GMT'],
+		]),
+		serialized: {
 			'set-cookie': [
-				'id=a3fWa; Expires=Wed, 21 Oct 2015 07:28:00 GMT',
-				'id=a3fWb; Expires=Wed, 21 Oct 2015 07:28:00 GMT',
+				'id=c88684ef-be61-4c2e-b14e-ac48cfe59a91; Expires=Wed, 21 Oct 2015 07:28:00 GMT',
+				'id=6707e2d2-b60d-4af7-b13d-3dbd61cd94df; Expires=Thu, 22 Oct 2015 08:29:00 GMT',
 			],
 		},
 	},
@@ -217,9 +232,11 @@ Deno.test(jsonStringifyDeterministically.name, () => {
 		},
 		nullish: null,
 	}
+	const stringified = '{"a":1,"arr":[1,2],"b":2,"c":3,"nested":{"a":2,"b":{"c":3,"d":4}},"nullish":null}'
 
 	assertNotEquals(JSON.stringify(unsorted), JSON.stringify(sorted))
 	assertEquals(jsonStringifyDeterministically(unsorted), JSON.stringify(sorted))
+	assertEquals(jsonStringifyDeterministically(unsorted), stringified)
 	assertEquals(jsonStringifyDeterministically(unsorted), jsonStringifyDeterministically(sorted))
 })
 
@@ -230,6 +247,19 @@ Deno.test(getFileName.name, async () => {
 })
 
 Deno.test(getKey.name, async () => {
+	assertEquals(
+		await getKey(await serializeRequest(new Request('https://example.com'))),
+		'd23acf131dc06be940b7a84ff8304caabe9d5a3f458d5ded467cddac45a8dc81',
+	)
+	assertEquals(
+		await getKey(
+			await serializeRequest(
+				new Request('https://example.com', { headers: { a: '1' }, method: 'POST', body: 'some text' }),
+			),
+		),
+		'54fdfaa244567899f780f7ab55045547018306b54b4974eb854e650623636b6b',
+	)
+
 	const keys = new Set<string>()
 
 	const reqs = [
@@ -238,6 +268,7 @@ Deno.test(getKey.name, async () => {
 		new Request('https://example.com', { method: 'POST' }),
 		new Request('https://example.com', { method: 'POST', body: 'some text' }),
 		new Request('https://example.com?a=1'),
+		new Request('https://example.com', { headers: { a: '1' }, method: 'POST', body: 'some text' }),
 	]
 
 	for (const req of reqs) {
