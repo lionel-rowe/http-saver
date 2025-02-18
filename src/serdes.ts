@@ -150,7 +150,7 @@ export async function getKey(req: SerializedRequest): Promise<string> {
 }
 
 // always use same order for keys
-export function jsonStringifyDeterministically(obj: unknown, space?: '\t' | number): string {
+export function jsonStringifyDeterministically(obj: unknown): string {
 	return JSON.stringify(
 		obj,
 		(_, value) => {
@@ -159,7 +159,6 @@ export function jsonStringifyDeterministically(obj: unknown, space?: '\t' | numb
 			}
 			return value
 		},
-		space,
 	)
 }
 

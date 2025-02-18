@@ -3,14 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from '@std/path/join'
 import { getJsonDataFromFile } from './fs.ts'
 import type { ResInfo, SerializedRequest } from './serdes.ts'
-import {
-	deserializeResponse,
-	getFileName,
-	getKey,
-	jsonStringifyDeterministically,
-	serializeRequest,
-	serializeResponse,
-} from './serdes.ts'
+import { deserializeResponse, getFileName, getKey, serializeRequest, serializeResponse } from './serdes.ts'
 import { Sanitizer } from './sanitizer.ts'
 import { rm } from 'node:fs/promises'
 import { assert } from '@std/assert/assert'
@@ -175,7 +168,7 @@ export class HttpSaver {
 			request: serializedRequest,
 			response: await serializeResponse(await this.options.sanitizer.sanitizeResponse(res.clone())),
 		}
-		await writeFile(filePath, jsonStringifyDeterministically(resInfo, this.options.jsonSpace) + '\n')
+		await writeFile(filePath, JSON.stringify(resInfo, null, this.options.jsonSpace) + '\n')
 
 		return res
 	}
