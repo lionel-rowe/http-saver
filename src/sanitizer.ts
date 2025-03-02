@@ -1,3 +1,5 @@
+import type { SerializedHeaders, SerializedRequest, SerializedResponse } from './serdes.ts'
+
 const defaultSanitizerOptions: SanitizerOptions = {
 	allowedHeaders: [
 		'accept',
@@ -32,8 +34,8 @@ export type SanitizerOptions = {
  * A class to sanitize sensitive data from requests and responses.
  */
 export class Sanitizer {
-	protected readonly allowedHeaders: ReadonlySet<string>
-	protected readonly blockedQueryParams: RegExp
+	readonly allowedHeaders: ReadonlySet<string>
+	readonly blockedQueryParams: RegExp
 
 	constructor(options?: Partial<SanitizerOptions>) {
 		const opts = {
@@ -49,45 +51,41 @@ export class Sanitizer {
 	 * @param req A cloned version of the request
 	 * @returns A sanitized version of the request
 	 */
-	sanitizeRequest(req: Request): Request | Promise<Request> {
-		return new Request(
-			this.sanitizeUrl(req.url),
-			{
-				method: req.method,
-				headers: this.sanitizeHeaders(req.headers),
-				body: req.body,
-			},
-		)
+	sanitizeRequest(req: SerializedRequest): SerializedRequest | Promise<SerializedRequest> {
+		return {
+			method: req.method,
+			url: this.sanitizeUrl(req.url).href,
+			headers: this.sanitizeHeaders(req.headers),
+			body: req.body,
+		}
 	}
 
 	/**
 	 * @param res A cloned version of the response
+	 * @param req A cloned version of the request
 	 * @returns A sanitized version of the response
 	 */
-	sanitizeResponse(res: Response): Response | Promise<Response> {
-		return new Response(
-			res.body,
-			{
-				status: res.status,
-				statusText: res.statusText,
-				headers: this.sanitizeHeaders(res.headers),
-			},
+	sanitizeResponse(
+		res: SerializedResponse,
+		// deno-lint-ignore no-unused-vars
+		req: SerializedRequest,
+	): SerializedResponse | Promise<SerializedResponse> {
+		return {
+			status: res.status,
+			statusText: res.statusText,
+			url: res.url,
+			headers: this.sanitizeHeaders(res.headers),
+			body: res.body,
+		}
+	}
+
+	sanitizeHeaders(headers: SerializedHeaders): SerializedHeaders {
+		return Object.fromEntries(
+			Object.entries(headers).filter(([key]) => this.allowedHeaders.has(key.toLowerCase())),
 		)
 	}
 
-	protected sanitizeHeaders(headers: Headers): Headers {
-		const sanitizedHeaders = new Headers()
-
-		for (const key of headers.keys()) {
-			if (this.allowedHeaders.has(key)) {
-				sanitizedHeaders.append(key, headers.get(key)!)
-			}
-		}
-
-		return sanitizedHeaders
-	}
-
-	protected sanitizeUrl(url: URL | string): URL {
+	sanitizeUrl(url: URL | string): URL {
 		url = new URL(url)
 		url.searchParams.sort()
 

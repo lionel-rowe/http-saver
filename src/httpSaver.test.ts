@@ -123,6 +123,7 @@ Deno.test(HttpSaver.name, async () => {
 		assertEquals(cachedRes.headers.get('date'), null)
 
 		assertEquals(await getBody(cachedRes), await getBody(liveRes))
+		assertEquals(cachedRes.url, liveRes.url)
 		assertEquals(cachedRes.status, liveRes.status)
 		assertEquals(cachedRes.statusText, liveRes.statusText)
 	}

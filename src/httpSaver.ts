@@ -7,6 +7,7 @@ import { deserializeResponse, getFileName, getKey, serializeRequest, serializeRe
 import { Sanitizer } from './sanitizer.ts'
 import { rm } from 'node:fs/promises'
 import { assert } from '@std/assert/assert'
+import { MockResponse } from './mockResponse.ts'
 
 /**
  * Constructor options for {@linkcode HttpSaver}
@@ -111,7 +112,7 @@ export class HttpSaver {
 			await this.#ready.promise
 
 			const req = toRequest(input, init)
-			const serializedRequest = await serializeRequest(await this.options.sanitizer.sanitizeRequest(req.clone()))
+			const serializedRequest = await this.options.sanitizer.sanitizeRequest(await serializeRequest(req))
 
 			const [fileName, key] = await Promise.all([
 				getFileName(serializedRequest),
@@ -163,11 +164,17 @@ export class HttpSaver {
 			getJsonDataFromFile<ResInfo>(filePath),
 		])
 
+		const response = await this.options.sanitizer.sanitizeResponse(
+			await serializeResponse(res.clone()),
+			await serializeRequest(req.clone()),
+		)
+
 		resInfo[key] = {
 			lastSaved: new Date().toISOString(),
 			request: serializedRequest,
-			response: await serializeResponse(await this.options.sanitizer.sanitizeResponse(res.clone())),
+			response,
 		}
+
 		await writeFile(filePath, JSON.stringify(resInfo, null, this.options.jsonSpace) + '\n')
 
 		return res

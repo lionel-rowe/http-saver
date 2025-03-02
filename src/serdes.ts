@@ -1,6 +1,7 @@
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
 import { encodeHex } from '@std/encoding/hex'
 import { asArray } from './utils.ts'
+import { MockResponse } from './mockResponse.ts'
 
 export type ResInfo = Partial<Record<string, Serialized>>
 
@@ -36,19 +37,20 @@ export type SerializedResponse = {
 	headers: SerializedHeaders
 	status: number
 	statusText: string
+	url: string
 }
 
 export async function serializeResponse(res: Response): Promise<SerializedResponse> {
-	const { status, statusText } = res
+	const { status, statusText, url } = res
 	const body = serializeBody(await res.clone().arrayBuffer())
 	const headers = serializeHeaders(res.headers)
-	return { status, statusText, headers, body }
+	return { status, statusText, headers, body, url }
 }
 
 export function deserializeResponse(serialized: SerializedResponse): Response {
 	const { status, statusText, headers, body } = serialized
 
-	return new Response(
+	const res = new MockResponse(
 		deserializeBody(body),
 		{
 			headers: deserializeHeaders(headers),
@@ -56,6 +58,10 @@ export function deserializeResponse(serialized: SerializedResponse): Response {
 			statusText,
 		},
 	)
+
+	res.url = serialized.url
+
+	return res
 }
 
 // #endregion

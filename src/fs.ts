@@ -18,8 +18,12 @@ export const getJsonDataFromFile = memoize(
 			throw e
 		}
 
+		// allow empty file
+		if (!/\S/.test(fileText)) return {} as T
+
 		const data = JSON.parse(fileText)
 
+		// disallow contentful file that isn't valid JSON
 		assert(typeof data === 'object' && data != null, 'data must be an object')
 
 		return data as T

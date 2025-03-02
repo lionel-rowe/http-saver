@@ -1,11 +1,12 @@
 {
 	"lock": false,
 	"name": "@li/http-saver",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"exports": {
 		".": "./src/mod.ts",
 		"./http-saver": "./src/httpSaver.ts",
-		"./sanitizer": "./src/sanitizer.ts"
+		"./sanitizer": "./src/sanitizer.ts",
+		"./mock-response": "./src/mockResponse.ts"
 	},
 	"tasks": {
 		"test": "deno test -RWN --allow-run"
