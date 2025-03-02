@@ -14,6 +14,7 @@ import {
 	serializeResponse,
 } from './serdes.ts'
 import { SerializedBody } from './serdes.ts'
+import { MockResponse } from './mockResponse.ts'
 
 const textEncoder = new TextEncoder()
 
@@ -52,22 +53,24 @@ const requestCases: Cases<Request, SerializedRequest> = [
 const responseCases: Cases<Response, SerializedResponse> = [
 	{
 		description: 'no body',
-		hydrated: new Response(null),
+		hydrated: new MockResponse(null),
 		serialized: {
 			status: 200,
 			statusText: '',
 			headers: {},
 			body: null,
+			url: '',
 		},
 	},
 	{
 		description: 'JSON body',
-		hydrated: new Response(JSON.stringify({ a: 1 }), { status: 234, statusText: 'xyz' }),
+		hydrated: new MockResponse(JSON.stringify({ a: 1 }), { status: 234, statusText: 'xyz' }),
 		serialized: {
 			status: 234,
 			statusText: 'xyz',
 			headers: { 'content-type': 'text/plain;charset=UTF-8' },
 			body: { kind: 'json', data: { a: 1 } },
+			url: '',
 		},
 	},
 ]

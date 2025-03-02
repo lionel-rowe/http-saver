@@ -85,6 +85,17 @@ Deno.test(getJsonDataFromFile.name, async (t) => {
 			})
 		})
 
+		await t.step('file is empty (return empty object)', async () => {
+			await testWithParams({
+				permissionFlags: ['--allow-read'],
+				fileContent: '',
+				expect: {
+					success: true,
+					stdout: '{}',
+				},
+			})
+		})
+
 		await t.step('file is a valid JSON object (return contents)', async () => {
 			await testWithParams({
 				permissionFlags: ['--allow-read'],
@@ -95,20 +106,20 @@ Deno.test(getJsonDataFromFile.name, async (t) => {
 				},
 			})
 		})
-	})
 
-	await t.step('error scenarios', async (t) => {
-		await t.step('file is empty', async () => {
+		await t.step('ignore whitespace', async () => {
 			await testWithParams({
 				permissionFlags: ['--allow-read'],
-				fileContent: '',
+				fileContent: '\n{\t} ',
 				expect: {
-					success: false,
-					stderr: 'Unexpected end of JSON input',
+					success: true,
+					stdout: '{}',
 				},
 			})
 		})
+	})
 
+	await t.step('error scenarios', async (t) => {
 		await t.step('file isn’t valid JSON', async () => {
 			await testWithParams({
 				permissionFlags: ['--allow-read'],
