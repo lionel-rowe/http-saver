@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert'
 import { MockResponse } from './mockResponse.ts'
 
-Deno.test(MockResponse.name, async (t) => {
+Deno.test(MockResponse.name, async () => {
 	const bodyText = 'body text'
 
 	const res1 = new MockResponse(bodyText)

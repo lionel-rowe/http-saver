@@ -47,11 +47,23 @@ export async function serializeResponse(res: Response): Promise<SerializedRespon
 	return { status, statusText, headers, body, url }
 }
 
-export function deserializeResponse(serialized: SerializedResponse): Response {
-	const { status, statusText, headers, body } = serialized
+export function deserializeResponse(serialized: SerializedResponse, signal?: AbortSignal): Response {
+	const { status, statusText, headers } = serialized
+	let body: BodyInit | null = deserializeBody(serialized.body)
+
+	if (body != null && signal != null) {
+		const ts = new TransformStream<Uint8Array, Uint8Array>({
+			transform(chunk, controller) {
+				if (signal.aborted) throw signal.reason
+				controller.enqueue(chunk)
+			},
+		})
+		new Response(body).body!.pipeThrough(ts)
+		body = ts.readable
+	}
 
 	const res = new MockResponse(
-		deserializeBody(body),
+		body,
 		{
 			headers: deserializeHeaders(headers),
 			status,

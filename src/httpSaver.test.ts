@@ -1,4 +1,4 @@
-import { assertEquals, assertNotEquals } from '@std/assert'
+import { assertEquals, assertNotEquals, assertRejects } from '@std/assert'
 import { HttpSaver } from './httpSaver.ts'
 
 // Can't use spy/stub from `@std/testing/mock` because they don't allow the same function to be stubbed multiple times
@@ -127,4 +127,90 @@ Deno.test(HttpSaver.name, async () => {
 		assertEquals(cachedRes.status, liveRes.status)
 		assertEquals(cachedRes.statusText, liveRes.statusText)
 	}
+})
+
+Deno.test('signal', async (t) => {
+	const URL = 'https://example.com'
+
+	async function go(t: Deno.TestContext) {
+		// ensure cache is populated for request
+		const res = await fetch(URL)
+		await res.body!.cancel()
+
+		await t.step('no throw when aborted after read is complete', async () => {
+			const controller = new AbortController()
+			const signal = controller.signal
+
+			const res = await fetch(URL, { signal })
+			assertEquals(res.status, 200)
+
+			await res.bytes()
+
+			controller.abort()
+		})
+
+		await t.step('no throw when aborted after body canceled', async () => {
+			const controller = new AbortController()
+			const signal = controller.signal
+
+			const res = await fetch(URL, { signal })
+			await res.body!.cancel()
+
+			controller.abort()
+		})
+
+		await t.step('throw on fetch when already aborted', async () => {
+			const controller = new AbortController()
+			const signal = controller.signal
+
+			controller.abort()
+
+			await assertRejects(
+				async () => {
+					await fetch(URL, { signal })
+				},
+				DOMException,
+				'aborted',
+			)
+		})
+
+		await t.step('throw on attempted body read when aborted after initial fetch', async () => {
+			const controller = new AbortController()
+			const signal = controller.signal
+
+			const res = await fetch(URL, { signal })
+
+			controller.abort()
+
+			await assertRejects(
+				async () => {
+					await res.bytes()
+				},
+				DOMException,
+				'aborted',
+			)
+		})
+	}
+
+	await t.step('baseline', go)
+
+	await t.step('with HttpSaver (overwrite mode)', async (t) => {
+		const httpSaver = new HttpSaver({
+			dirPath: '_temp/path',
+			mode: 'overwrite',
+		})
+
+		using _ = httpSaver.stubFetch()
+		await go(t)
+	})
+
+	await t.step('with HttpSaver (reset mode)', async (t) => {
+		const httpSaver = new HttpSaver({
+			dirPath: '_temp/path',
+			mode: 'reset',
+		})
+
+		using _ = httpSaver.stubFetch()
+		await go(t)
+	})
 })

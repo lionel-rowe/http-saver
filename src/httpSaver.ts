@@ -7,7 +7,6 @@ import { deserializeResponse, getFileName, getKey, serializeRequest, serializeRe
 import { Sanitizer } from './sanitizer.ts'
 import { rm } from 'node:fs/promises'
 import { assert } from '@std/assert/assert'
-import { MockResponse } from './mockResponse.ts'
 
 /**
  * Constructor options for {@linkcode HttpSaver}
@@ -48,16 +47,6 @@ const defaultOptions: HttpSaverOptions = {
 	jsonSpace: '\t',
 }
 
-function toRequest(input: URL | Request | string, init?: RequestInit) {
-	if (input instanceof URL) {
-		return new Request(input.href, init)
-	} else if (input instanceof Request) {
-		return input
-	} else {
-		return new Request(input, init)
-	}
-}
-
 class CacheMissError extends Error {
 	override name = this.constructor.name
 }
@@ -80,14 +69,11 @@ export class HttpSaver {
 
 		assert(opts.dirPath !== '', 'dirPath must not be an empty string')
 
-		if (this.options.mode === 'reset') {
-			void (async () => {
-				await rm(opts.dirPath, { recursive: true, force: true })
-				this.#ready.resolve()
-			})()
-		} else {
-			this.#ready.resolve()
-		}
+		const ready = this.options.mode === 'reset'
+			? rm(opts.dirPath, { recursive: true, force: true })
+			: Promise.resolve()
+
+		ready.then(() => this.#ready.resolve())
 	}
 
 	/**
@@ -111,7 +97,11 @@ export class HttpSaver {
 		return stub(globalThis, 'fetch', async (input, init) => {
 			await this.#ready.promise
 
-			const req = toRequest(input, init)
+			const req = new Request(input, init)
+
+			const signal = init?.signal ?? undefined
+			if (signal?.aborted) throw signal.reason
+
 			const serializedRequest = await this.options.sanitizer.sanitizeRequest(await serializeRequest(req))
 
 			const [fileName, key] = await Promise.all([
@@ -121,7 +111,7 @@ export class HttpSaver {
 
 			const filePath = join(this.options.dirPath, fileName)
 
-			const params = { req, serializedRequest, key, filePath }
+			const params = { req, serializedRequest, key, filePath, signal }
 
 			switch (this.options.mode) {
 				case 'ensure':
@@ -146,7 +136,7 @@ export class HttpSaver {
 		})
 	}
 
-	async #read({ key, filePath }: StubFetchSubMethodParams) {
+	async #read({ key, filePath, signal }: StubFetchSubMethodParams) {
 		const resInfo = await getJsonDataFromFile<ResInfo>(filePath)
 		if (!Object.hasOwn(resInfo, key)) {
 			throw new CacheMissError(
@@ -154,10 +144,10 @@ export class HttpSaver {
 			)
 		}
 
-		return deserializeResponse(resInfo[key]!.response)
+		return deserializeResponse(resInfo[key]!.response, signal)
 	}
 
-	async #overwrite({ req, serializedRequest, key, filePath }: StubFetchSubMethodParams) {
+	async #overwrite({ req, serializedRequest, key, filePath, signal }: StubFetchSubMethodParams) {
 		const [, res, resInfo] = await Promise.all([
 			mkdir(this.options.dirPath, { recursive: true }),
 			this.#realFetch(req.clone()),
@@ -177,7 +167,7 @@ export class HttpSaver {
 
 		await writeFile(filePath, JSON.stringify(resInfo, null, this.options.jsonSpace) + '\n')
 
-		return res
+		return deserializeResponse(resInfo[key]!.response, signal)
 	}
 }
 
@@ -186,4 +176,5 @@ type StubFetchSubMethodParams = {
 	serializedRequest: SerializedRequest
 	key: string
 	filePath: string
+	signal?: AbortSignal
 }
