@@ -9,8 +9,11 @@ import { rm } from 'node:fs/promises'
 import { assert } from '@std/assert/assert'
 
 /**
- * Constructor options for {@linkcode HttpSaver}
+ * @module
+ * Save API responses for testing.
  */
+
+/** Constructor options for {@linkcode HttpSaver} */
 export type HttpSaverOptions = {
 	/**
 	 * - If `ensure`, cached responses will be used where available, substituting and caching live responses otherwise.
@@ -51,9 +54,7 @@ class CacheMissError extends Error {
 	override name = this.constructor.name
 }
 
-/**
- * A class to cache responses for testing in the file system.
- */
+/** A class to cache responses for testing in the file system. */
 export class HttpSaver {
 	options: HttpSaverOptions
 	#realFetch = globalThis.fetch

@@ -1,5 +1,10 @@
 import type { SerializedHeaders, SerializedRequest, SerializedResponse } from './serdes.ts'
 
+/**
+ * @module
+ * Sanitize sensitive data from requests and responses.
+ */
+
 const defaultSanitizerOptions: SanitizerOptions = {
 	allowedHeaders: [
 		'accept',
@@ -32,6 +37,11 @@ export type SanitizerOptions = {
 
 /**
  * A class to sanitize sensitive data from requests and responses.
+ *
+ * Passing an instance of this class to the `HttpSaver` constructor can be use to customize the sanitization of requests
+ * and responses.
+ *
+ * For more granular control, subclassing and overriding the `sanitize*` methods is recommended.
  */
 export class Sanitizer {
 	readonly allowedHeaders: ReadonlySet<string>

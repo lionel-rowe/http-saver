@@ -1,5 +1,11 @@
 const urlMap = new WeakMap<MockResponse, string>()
 
+/**
+ * @module
+ * A mock response class that allows setting and getting the URL.
+ */
+
+/** A mock response class that allows setting and getting the URL. */
 export class MockResponse extends Response {
 	override get url(): string {
 		return urlMap.get(this) ?? ''

@@ -13,6 +13,7 @@ export type Serialized = {
 
 // #region Request
 
+/** A serialized request object */
 export type SerializedRequest = {
 	method: string
 	url: string
@@ -32,6 +33,7 @@ export async function serializeRequest(req: Request): Promise<SerializedRequest>
 // #endregion
 // #region Response
 
+/** A serialized response object */
 export type SerializedResponse = {
 	body: SerializedBody
 	headers: SerializedHeaders
@@ -79,6 +81,7 @@ export function deserializeResponse(serialized: SerializedResponse, signal?: Abo
 // #endregion
 // #region Headers
 
+/** Serialized headers, with duplicate headers represented as an array. */
 export type SerializedHeaders = Record<string, string | string[]>
 
 export function serializeHeaders(headers: Headers): SerializedHeaders {
