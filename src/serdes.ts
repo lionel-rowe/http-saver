@@ -160,14 +160,16 @@ export function deserializeBody(body: SerializedBody): Uint8Array | null {
 // #endregion
 // #region Misc
 
-export function getFileName(req: SerializedRequest): string {
-	return `${encodeURIComponent(new URL(req.url).host)}.json`
+export async function getFileName(req: SerializedRequest): Promise<string> {
+	return `${encodeURIComponent(new URL(req.url).host)}/${
+		encodeHex(
+			await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jsonStringifyDeterministically(req))),
+		)
+	}.json`
 }
 
-export async function getKey(req: SerializedRequest): Promise<string> {
-	return encodeHex(
-		await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jsonStringifyDeterministically(req))),
-	)
+export function getKey(_req: SerializedRequest): string {
+	return 'data'
 }
 
 // always use same order for keys

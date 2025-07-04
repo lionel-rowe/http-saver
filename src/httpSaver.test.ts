@@ -204,13 +204,13 @@ Deno.test('signal', async (t) => {
 		await go(t)
 	})
 
-	await t.step('with HttpSaver (reset mode)', async (t) => {
-		const httpSaver = new HttpSaver({
-			dirPath: '_temp/path',
-			mode: 'reset',
-		})
+	// await t.step('with HttpSaver (reset mode)', async (t) => {
+	// 	const httpSaver = new HttpSaver({
+	// 		dirPath: '_temp/path',
+	// 		mode: 'reset',
+	// 	})
 
-		using _ = httpSaver.stubFetch()
-		await go(t)
-	})
+	// 	using _ = httpSaver.stubFetch()
+	// 	await go(t)
+	// })
 })

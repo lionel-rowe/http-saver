@@ -1,4 +1,4 @@
-import { assertEquals, assertNotEquals } from '@std/assert'
+import { assertEquals, assertMatch, assertNotEquals, assertStringIncludes } from '@std/assert'
 import type { SerializedHeaders, SerializedRequest, SerializedResponse } from './serdes.ts'
 import {
 	deserializeBody,
@@ -244,26 +244,33 @@ Deno.test(jsonStringifyDeterministically.name, () => {
 })
 
 Deno.test(getFileName.name, async () => {
-	assertEquals(getFileName(await serializeRequest(new Request('https://example.com'))), 'example.com.json')
-	assertEquals(getFileName(await serializeRequest(new Request('https://example.com/path'))), 'example.com.json')
-	assertEquals(getFileName(await serializeRequest(new Request('https://example.com?a=1'))), 'example.com.json')
-})
-
-Deno.test(getKey.name, async () => {
-	assertEquals(
-		await getKey(await serializeRequest(new Request('https://example.com'))),
-		'd23acf131dc06be940b7a84ff8304caabe9d5a3f458d5ded467cddac45a8dc81',
+	assertMatch(
+		await getFileName(await serializeRequest(new Request('https://example.com'))),
+		/example\.com\/\w+\.json/,
 	)
-	assertEquals(
-		await getKey(
+	assertMatch(
+		await getFileName(await serializeRequest(new Request('https://example.com/path'))),
+		/example\.com\/\w+\.json/,
+	)
+	assertMatch(
+		await getFileName(await serializeRequest(new Request('https://example.com?a=1'))),
+		/example\.com\/\w+\.json/,
+	)
+
+	assertStringIncludes(
+		await getFileName(await serializeRequest(new Request('https://example.com'))),
+		'/d23acf131dc06be940b7a84ff8304caabe9d5a3f458d5ded467cddac45a8dc81.json',
+	)
+	assertStringIncludes(
+		await getFileName(
 			await serializeRequest(
 				new Request('https://example.com', { headers: { a: '1' }, method: 'POST', body: 'some text' }),
 			),
 		),
-		'54fdfaa244567899f780f7ab55045547018306b54b4974eb854e650623636b6b',
+		'/54fdfaa244567899f780f7ab55045547018306b54b4974eb854e650623636b6b.json',
 	)
 
-	const keys = new Set<string>()
+	const paths = new Set<string>()
 
 	const reqs = [
 		new Request('https://example.com'),
@@ -275,14 +282,21 @@ Deno.test(getKey.name, async () => {
 	]
 
 	for (const req of reqs) {
-		keys.add(await getKey(await serializeRequest(req.clone())))
+		paths.add(await getFileName(await serializeRequest(req.clone())))
 	}
 
-	assertEquals(keys.size, reqs.length, 'Keys must be unique')
+	assertEquals(paths.size, reqs.length, 'Paths must be unique')
 
 	for (const req of reqs) {
-		keys.add(await getKey(await serializeRequest(req.clone())))
+		paths.add(await getFileName(await serializeRequest(req.clone())))
 	}
 
-	assertEquals(keys.size, reqs.length, 'Keys must be stable for same request input, even if not reference-equal')
+	assertEquals(paths.size, reqs.length, 'Paths must be stable for same request input, even if not reference-equal')
+})
+
+Deno.test(getKey.name, async () => {
+	assertEquals(
+		getKey(await serializeRequest(new Request('https://example.com'))),
+		'data',
+	)
 })

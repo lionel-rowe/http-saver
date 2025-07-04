@@ -1,6 +1,7 @@
 import { stub } from '@std/testing/mock'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from '@std/path/join'
+import { dirname } from '@std/path/dirname'
 import { getJsonDataFromFile } from './fs.ts'
 import type { ResInfo, SerializedRequest } from './serdes.ts'
 import { deserializeResponse, getFileName, getKey, serializeRequest, serializeResponse } from './serdes.ts'
@@ -41,6 +42,14 @@ export type HttpSaverOptions = {
 	 * @default {'\t'}
 	 */
 	jsonSpace: '\t' | number
+	/**
+	 * Function to get the file name for a given request.
+	 */
+	getFileName: (req: SerializedRequest) => string | Promise<string>
+	/**
+	 * Function to get the top-level JSON key for a given request.
+	 */
+	getKey: (req: SerializedRequest) => string | Promise<string>
 }
 
 const defaultOptions: HttpSaverOptions = {
@@ -48,6 +57,8 @@ const defaultOptions: HttpSaverOptions = {
 	dirPath: '_fixtures/responses',
 	sanitizer: new Sanitizer(),
 	jsonSpace: '\t',
+	getFileName,
+	getKey,
 }
 
 class CacheMissError extends Error {
@@ -59,6 +70,9 @@ export class HttpSaver {
 	options: HttpSaverOptions
 	#realFetch = globalThis.fetch
 	#ready = Promise.withResolvers<void>()
+
+	getFileName: (req: SerializedRequest) => string | Promise<string>
+	getKey: (req: SerializedRequest) => string | Promise<string>
 
 	constructor(options?: Partial<HttpSaverOptions>) {
 		const opts = {
@@ -75,6 +89,9 @@ export class HttpSaver {
 			: Promise.resolve()
 
 		ready.then(() => this.#ready.resolve())
+
+		this.getFileName = opts.getFileName
+		this.getKey = opts.getKey
 	}
 
 	/**
@@ -106,8 +123,8 @@ export class HttpSaver {
 			const serializedRequest = await this.options.sanitizer.sanitizeRequest(await serializeRequest(req))
 
 			const [fileName, key] = await Promise.all([
-				getFileName(serializedRequest),
-				getKey(serializedRequest),
+				this.getFileName(serializedRequest),
+				this.getKey(serializedRequest),
 			])
 
 			const filePath = join(this.options.dirPath, fileName)
@@ -166,6 +183,7 @@ export class HttpSaver {
 			response,
 		}
 
+		await mkdir(dirname(filePath), { recursive: true })
 		await writeFile(filePath, JSON.stringify(resInfo, null, this.options.jsonSpace) + '\n')
 
 		return deserializeResponse(resInfo[key]!.response, signal)
