@@ -1,6 +1,10 @@
 import { memoize } from '@std/cache/memoize'
+import { LruCache } from '@std/cache/lru-cache'
 import { assert } from '@std/assert/assert'
 import { readFile } from 'node:fs/promises'
+
+// deno-lint-ignore no-explicit-any
+const cache = new LruCache<any, any>(100)
 
 export const getJsonDataFromFile = memoize(
 	async function getJsonDataFromFile<T extends Partial<Record<string, unknown>> = never>(
@@ -28,4 +32,5 @@ export const getJsonDataFromFile = memoize(
 
 		return data as T
 	},
+	{ cache },
 )
